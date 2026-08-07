@@ -18,6 +18,8 @@ typedef struct lzrc_profile_parameters {
 
 bool lzrc_profile_get(unsigned int profile,
                       lzrc_profile_parameters *parameters);
+uint32_t lzrc_lzss_estimated_literal_bits(uint16_t length);
+uint32_t lzrc_lzss_estimated_match_bits(uint16_t length, uint32_t offset);
 bool lzrc_lzss_tokenize(unsigned int profile,
                         const uint8_t *input,
                         size_t input_size,

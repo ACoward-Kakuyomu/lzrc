@@ -19,6 +19,39 @@ bool lzrc_profile_get(unsigned int profile,
     return true;
 }
 
+uint32_t lzrc_lzss_estimated_literal_bits(uint16_t length) {
+    return (uint32_t)length * UINT32_C(9);
+}
+
+uint32_t lzrc_lzss_estimated_match_bits(uint16_t length, uint32_t offset) {
+    uint32_t length_bits;
+    uint32_t offset_bits;
+    if (length < 3U || length > 530U || offset == 0U ||
+        offset > UINT32_C(16777216)) {
+        return UINT32_MAX;
+    }
+    if (length <= 18U) {
+        length_bits = 5U;
+    } else if (length <= 274U) {
+        length_bits = 10U;
+    } else {
+        length_bits = 11U;
+    }
+
+    if (offset <= UINT32_C(256)) {
+        offset_bits = 9U;
+    } else if (offset <= UINT32_C(4096)) {
+        offset_bits = 14U;
+    } else if (offset <= UINT32_C(65536)) {
+        offset_bits = 19U;
+    } else if (offset <= UINT32_C(1048576)) {
+        offset_bits = 24U;
+    } else {
+        offset_bits = 29U;
+    }
+    return UINT32_C(1) + length_bits + offset_bits;
+}
+
 static bool emit_token(lzrc_token *tokens,
                        size_t token_capacity,
                        size_t *token_count,
@@ -152,6 +185,7 @@ static bool tokenize_hashed(unsigned int profile,
     while (position < input_size) {
         size_t best_length = 0U;
         uint32_t best_offset = 0U;
+        uint32_t best_savings = 0U;
         if (input_size - position >= 3U) {
             const uint32_t hash = hash3(input, position, hash_mask);
             uint32_t candidate = heads[hash];
@@ -168,11 +202,25 @@ static bool tokenize_hashed(unsigned int profile,
                            input[position + length]) {
                     ++length;
                 }
-                if (length > best_length && length >= 3U) {
-                    best_length = length;
-                    best_offset = (uint32_t)offset;
-                    if (best_length == parameters.maximum_match_length) {
-                        break;
+                if (length >= 3U) {
+                    const uint32_t match_bits =
+                        lzrc_lzss_estimated_match_bits((uint16_t)length,
+                                                       (uint32_t)offset);
+                    const uint32_t literal_bits =
+                        lzrc_lzss_estimated_literal_bits((uint16_t)length);
+                    const uint32_t savings =
+                        (literal_bits > match_bits) ? literal_bits - match_bits
+                                                    : 0U;
+                    if (savings > best_savings ||
+                        (savings == best_savings && savings != 0U &&
+                         (length > best_length ||
+                          (length == best_length && offset < best_offset)))) {
+                        best_length = length;
+                        best_offset = (uint32_t)offset;
+                        best_savings = savings;
+                        if (best_length == parameters.maximum_match_length) {
+                            break;
+                        }
                     }
                 }
                 candidate = previous[candidate_position];

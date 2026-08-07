@@ -73,13 +73,60 @@ TEST(LzssProfile0Test, ChoosesFirstValidOldestCandidate) {
     EXPECT_EQ(last.offset, 8U);
 }
 
-TEST(LzssHigherProfileTest, ChoosesLongestThenNearestCandidate) {
+TEST(LzssHigherProfileTest, ChoosesMostProfitableThenNearestCandidate) {
     const auto tokens = Tokenize(1U, Bytes("abcQabcRabcR"));
     ASSERT_GE(tokens.size(), 1U);
     const auto& last = tokens.back();
     EXPECT_EQ(last.type, LZRC_TOKEN_MATCH);
     EXPECT_EQ(last.length, 4U);
     EXPECT_EQ(last.offset, 4U);
+}
+
+TEST(LzssCostTest, EstimatesCurrentTokenBitLayout) {
+    EXPECT_EQ(lzrc_lzss_estimated_literal_bits(3U), 27U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 1U), 15U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 257U), 20U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 4097U), 25U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 65537U), 30U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 1048577U), 35U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(19U, 1048577U), 40U);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(2U, 1U), UINT32_MAX);
+    EXPECT_EQ(lzrc_lzss_estimated_match_bits(3U, 0U), UINT32_MAX);
+}
+
+TEST(LzssCostTest, RejectsUnprofitableFarMatch) {
+    constexpr std::size_t target = 70000U;
+    std::vector<std::uint8_t> input(target + 3U, 0U);
+    const std::array<std::uint8_t, 3> marker{0xF1U, 0x37U, 0xC9U};
+    std::copy(marker.begin(), marker.end(), input.begin());
+    std::copy(marker.begin(), marker.end(), input.begin() + target);
+
+    const auto tokens = Tokenize(3U, input);
+    ASSERT_GE(tokens.size(), marker.size());
+    for (std::size_t index = 0U; index < marker.size(); ++index) {
+        const auto& token = tokens[tokens.size() - marker.size() + index];
+        EXPECT_EQ(token.type, LZRC_TOKEN_LITERAL);
+        EXPECT_EQ(token.literal, marker[index]);
+    }
+}
+
+TEST(LzssCostTest, PrefersShorterNearMatchWithGreaterSavings) {
+    constexpr std::size_t target = 70000U;
+    std::vector<std::uint8_t> input(target + 6U, 0U);
+    const std::array<std::uint8_t, 6> far_match{1U, 2U, 3U, 4U, 5U, 6U};
+    const std::array<std::uint8_t, 6> near_match{1U, 2U, 3U, 4U, 5U, 7U};
+    const std::array<std::uint8_t, 4> boundary{8U, 9U, 10U, 11U};
+    std::copy(far_match.begin(), far_match.end(), input.begin());
+    std::copy(near_match.begin(), near_match.end(), input.begin() + target - 10U);
+    std::copy(boundary.begin(), boundary.end(), input.begin() + target - 4U);
+    std::copy(far_match.begin(), far_match.end(), input.begin() + target);
+
+    const auto tokens = Tokenize(3U, input);
+    ASSERT_GE(tokens.size(), 2U);
+    const auto& selected = tokens[tokens.size() - 2U];
+    EXPECT_EQ(selected.type, LZRC_TOKEN_MATCH);
+    EXPECT_EQ(selected.length, 5U);
+    EXPECT_EQ(selected.offset, 10U);
 }
 
 TEST(LzssTest, SupportsOverlappingMatchesAndMaximumLengthSplits) {

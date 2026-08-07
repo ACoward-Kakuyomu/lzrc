@@ -21,3 +21,12 @@
 - Added malformed unary/unused-offset rejection and deterministic random boundary-size tests. Visual Studio 2026 Debug passed all 39 tests.
 - Verified all C sources with GCC in strict C99 warning-as-error syntax mode and verified the CMake install layout for the library, CLI, and public headers.
 - Measured the 29,040-byte implementation specification as a reference corpus: profile 0 produced 17,331 bytes (59.68%), profile 1 12,510 bytes (43.08%), profile 2 11,370 bytes (39.15%), and profiles 3/4 11,213 bytes (38.61%).
+
+## 2026-08-07 — Cost-aware matching experiment
+
+- Created `codex/cost-aware-matching-experiment` from `main`; the clean branch baseline passed all 39 tests.
+- Added tests first for static token costs, unprofitable far matches, and choosing a shorter near match with greater estimated savings.
+- Implemented static cost-aware candidate selection for profiles 1-4 while preserving profile 0's specified search.
+- Corrected one test fixture after a preceding zero run unintentionally formed a match across the intended token boundary; cost expectations were unchanged.
+- Passed all 42 tests and compared independent Release builds of `main` and the experiment.
+- Profiles 2-4 improved across all tested ordinary and generated corpora, by up to 2.31%; profile 1 remained effectively neutral with small regressions in several samples. Full results are in `COST_AWARE_MATCHING_EXPERIMENT.md`.

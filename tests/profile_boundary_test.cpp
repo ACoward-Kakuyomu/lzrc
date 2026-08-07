@@ -10,13 +10,15 @@
 namespace {
 
 std::vector<std::uint8_t> MarkerAtDistance(std::size_t distance) {
-    std::vector<std::uint8_t> input(distance + 3U, 0U);
+    std::vector<std::uint8_t> input(distance + 4U, 0U);
     input[0] = 0xF1U;
     input[1] = 0x37U;
     input[2] = 0xC9U;
+    input[3] = 0x6BU;
     input[distance] = 0xF1U;
     input[distance + 1U] = 0x37U;
     input[distance + 2U] = 0xC9U;
+    input[distance + 3U] = 0x6BU;
     return input;
 }
 
@@ -47,7 +49,7 @@ TEST(ProfileBoundaryTest, AcceptsMaximumWindowOffsetAndRejectsNextOffset) {
         ASSERT_FALSE(limit_tokens.empty());
         EXPECT_EQ(limit_tokens.back().type, LZRC_TOKEN_MATCH)
             << "profile=" << profile;
-        EXPECT_EQ(limit_tokens.back().length, 3U) << "profile=" << profile;
+        EXPECT_EQ(limit_tokens.back().length, 4U) << "profile=" << profile;
         EXPECT_EQ(limit_tokens.back().offset, parameters.window_size)
             << "profile=" << profile;
 
@@ -56,7 +58,10 @@ TEST(ProfileBoundaryTest, AcceptsMaximumWindowOffsetAndRejectsNextOffset) {
         const auto outside_tokens =
             TokenizeBoundary(profile, outside,
                              parameters.maximum_match_length);
-        ASSERT_GE(outside_tokens.size(), 3U);
+        ASSERT_GE(outside_tokens.size(), 4U);
+        EXPECT_EQ(outside_tokens[outside_tokens.size() - 4U].type,
+                  LZRC_TOKEN_LITERAL)
+            << "profile=" << profile;
         EXPECT_EQ(outside_tokens[outside_tokens.size() - 3U].type,
                   LZRC_TOKEN_LITERAL)
             << "profile=" << profile;
