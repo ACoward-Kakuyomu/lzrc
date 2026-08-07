@@ -203,23 +203,34 @@ static bool tokenize_hashed(unsigned int profile,
                     ++length;
                 }
                 if (length >= 3U) {
-                    const uint32_t match_bits =
-                        lzrc_lzss_estimated_match_bits((uint16_t)length,
-                                                       (uint32_t)offset);
-                    const uint32_t literal_bits =
-                        lzrc_lzss_estimated_literal_bits((uint16_t)length);
-                    const uint32_t savings =
-                        (literal_bits > match_bits) ? literal_bits - match_bits
-                                                    : 0U;
-                    if (savings > best_savings ||
-                        (savings == best_savings && savings != 0U &&
-                         (length > best_length ||
-                          (length == best_length && offset < best_offset)))) {
+                    if (profile == 1U && length > best_length) {
                         best_length = length;
                         best_offset = (uint32_t)offset;
-                        best_savings = savings;
                         if (best_length == parameters.maximum_match_length) {
                             break;
+                        }
+                    } else if (profile >= 2U) {
+                        const uint32_t match_bits =
+                            lzrc_lzss_estimated_match_bits((uint16_t)length,
+                                                           (uint32_t)offset);
+                        const uint32_t literal_bits =
+                            lzrc_lzss_estimated_literal_bits((uint16_t)length);
+                        const uint32_t savings =
+                            (literal_bits > match_bits)
+                                ? literal_bits - match_bits
+                                : 0U;
+                        if (savings > best_savings ||
+                            (savings == best_savings && savings != 0U &&
+                             (length > best_length ||
+                              (length == best_length &&
+                               offset < best_offset)))) {
+                            best_length = length;
+                            best_offset = (uint32_t)offset;
+                            best_savings = savings;
+                            if (best_length ==
+                                parameters.maximum_match_length) {
+                                break;
+                            }
                         }
                     }
                 }

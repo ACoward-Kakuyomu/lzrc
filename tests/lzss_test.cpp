@@ -73,13 +73,36 @@ TEST(LzssProfile0Test, ChoosesFirstValidOldestCandidate) {
     EXPECT_EQ(last.offset, 8U);
 }
 
-TEST(LzssHigherProfileTest, ChoosesMostProfitableThenNearestCandidate) {
+TEST(LzssProfile1Test, ChoosesLongestThenNearestCandidate) {
     const auto tokens = Tokenize(1U, Bytes("abcQabcRabcR"));
     ASSERT_GE(tokens.size(), 1U);
     const auto& last = tokens.back();
     EXPECT_EQ(last.type, LZRC_TOKEN_MATCH);
     EXPECT_EQ(last.length, 4U);
     EXPECT_EQ(last.offset, 4U);
+}
+
+TEST(LzssProfile1Test, RetainsLongestMatchRule) {
+    constexpr std::size_t target = 2000U;
+    std::vector<std::uint8_t> input(target + 19U, 0U);
+    std::array<std::uint8_t, 19> far_match{};
+    for (std::size_t index = 0U; index < far_match.size(); ++index) {
+        far_match[index] = static_cast<std::uint8_t>(index + 1U);
+    }
+    auto near_match = far_match;
+    near_match.back() = 0xEEU;
+    const std::array<std::uint8_t, 4> boundary{0xD1U, 0xD2U, 0xD3U, 0xD4U};
+    std::copy(far_match.begin(), far_match.end(), input.begin());
+    std::copy(near_match.begin(), near_match.end(), input.begin() + target - 100U);
+    std::copy(boundary.begin(), boundary.end(), input.begin() + target - 4U);
+    std::copy(far_match.begin(), far_match.end(), input.begin() + target);
+
+    const auto tokens = Tokenize(1U, input);
+    ASSERT_FALSE(tokens.empty());
+    const auto& selected = tokens.back();
+    EXPECT_EQ(selected.type, LZRC_TOKEN_MATCH);
+    EXPECT_EQ(selected.length, 19U);
+    EXPECT_EQ(selected.offset, 2000U);
 }
 
 TEST(LzssCostTest, EstimatesCurrentTokenBitLayout) {

@@ -30,3 +30,6 @@
 - Corrected one test fixture after a preceding zero run unintentionally formed a match across the intended token boundary; cost expectations were unchanged.
 - Passed all 42 tests and compared independent Release builds of `main` and the experiment.
 - Profiles 2-4 improved across all tested ordinary and generated corpora, by up to 2.31%; profile 1 remained effectively neutral with small regressions in several samples. Full results are in `COST_AWARE_MATCHING_EXPERIMENT.md`.
+- Added a failing regression test for profile 1's longest-match rule, then limited cost-aware selection to profiles 2-4. All 43 tests passed.
+- Verified that profile 1 output is byte-for-byte identical to `main` on all ordinary samples and that the new decoder restores `main`-produced profile 2-4 streams exactly.
+- Updated the implementation specification and experiment report, then selected the profile 2-4 policy for integration into `main`.
