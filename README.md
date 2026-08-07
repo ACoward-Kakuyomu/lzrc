@@ -1,5 +1,7 @@
 # LZRC
 
+[日本語ドキュメントはこちら](README_ja.md)
+
 LZRC is a reference implementation of an experimental general-purpose
 compressor combining LZSS with a context-adaptive binary range coder. It has
 five profiles, ranging from a 256-byte-window, 16-bit core intended to remain
