@@ -1,4 +1,4 @@
-#include "scapegoat_matchfinder.h"
+#include "binarytree_matchfinder.h"
 
 #include <stdlib.h>
 #include <string.h>

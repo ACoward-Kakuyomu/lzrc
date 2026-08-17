@@ -6,6 +6,7 @@ add_executable(lzrc_tests
     lzrc_test.cpp
     math_test.cpp
     range_coder_test.cpp
+    binarytree_matchfinder_test.cpp
 )
 
 target_link_libraries(lzrc_tests PRIVATE lzrc GTest::gtest_main)

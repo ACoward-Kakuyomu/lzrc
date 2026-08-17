@@ -112,7 +112,7 @@ static void print_result(const char *name,
     const double mebibytes = (double)input_size / (1024.0 * 1024.0);
     const double throughput =
         (result->seconds > 0.0) ? mebibytes / result->seconds : 0.0;
-    const lzrc_sg_statistics *sg = &result->statistics.scapegoat;
+    const lzrc_sg_statistics *sg = &result->statistics.binarytree;
     printf("%s\n", name);
     printf("  seconds: %.6f\n", result->seconds);
     printf("  MiB/s: %.3f\n", throughput);
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
     }
     printf("profile: %u\ninput bytes: %zu\n", profile, input_size);
     print_result("hash-chain", input_size, &hash_result);
-    print_result("hybrid-scapegoat", input_size, &hybrid_result);
+    print_result("hybrid-binarytree", input_size, &hybrid_result);
     free(input);
     return 0;
 }

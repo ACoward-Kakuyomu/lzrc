@@ -2,7 +2,7 @@
 #define LZRC_LZSS_MATCHFINDER_INTERNAL_H
 
 #include "lzss.h"
-#include "scapegoat_matchfinder.h"
+#include "binarytree_matchfinder.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -15,7 +15,7 @@ extern "C" {
 typedef struct lzrc_lzss_matchfinder_statistics {
     uint64_t hash_candidate_byte_comparison_count;
     uint64_t hash_visited_node_count;
-    lzrc_sg_statistics scapegoat;
+    lzrc_sg_statistics binarytree;
 } lzrc_lzss_matchfinder_statistics;
 
 bool lzrc_lzss_tokenize_instrumented(
@@ -25,7 +25,7 @@ bool lzrc_lzss_tokenize_instrumented(
     lzrc_token *tokens,
     size_t token_capacity,
     size_t *token_count,
-    bool use_hybrid_scapegoat,
+    bool use_hybrid_binarytree,
     lzrc_lzss_matchfinder_statistics *statistics);
 
 #ifdef __cplusplus

@@ -12,6 +12,7 @@ add_library(lzrc
     src/bit_tree.c
     src/carc.c
     src/lzss.c
+    src/binarytree_matchfinder.c
 )
 
 target_include_directories(lzrc
@@ -37,6 +38,25 @@ if(MSVC)
     target_compile_definitions(lzrc_cli PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(lzrc_cli PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+add_executable(lzrc_matchfinder_benchmark
+    tools/lzss_matchfinder_benchmark.c
+)
+target_link_libraries(lzrc_matchfinder_benchmark PRIVATE lzrc)
+target_include_directories(lzrc_matchfinder_benchmark PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_compile_features(lzrc_matchfinder_benchmark PRIVATE c_std_99)
+if(MSVC)
+    target_compile_options(lzrc_matchfinder_benchmark PRIVATE /W4 /WX)
+    target_compile_definitions(lzrc_matchfinder_benchmark PRIVATE
+        _CRT_SECURE_NO_WARNINGS
+    )
+else()
+    target_compile_options(lzrc_matchfinder_benchmark PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
 endif()
 
 install(TARGETS lzrc lzrc_cli
