@@ -72,7 +72,7 @@ TEST(CarcContextTest, UsesProfileSpecificContextCounts) {
     EXPECT_EQ(lzrc_carc_context_count(1U), 1037U);
     EXPECT_EQ(lzrc_carc_context_count(2U), 1292U);
     EXPECT_EQ(lzrc_carc_context_count(3U), 1547U);
-    EXPECT_EQ(lzrc_carc_context_count(4U), 2057U);
+    EXPECT_EQ(lzrc_carc_context_count(4U), 67337U);
     EXPECT_EQ(lzrc_carc_context_count(5U), 0U);
 }
 

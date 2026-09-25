@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define LZRC_FAST_MAX_CANDIDATES(PROFILE) (64U*(PROFILE))
+
 static const lzrc_profile_parameters kProfiles[5] = {
     {UINT32_C(256), UINT16_C(18)},
     {UINT32_C(4096), UINT16_C(274)},
@@ -152,6 +154,7 @@ static void insert_hash_positions(const uint8_t *input,
 }
 
 static bool tokenize_hashed(unsigned int profile,
+                            lzrc_lzss_search_mode mode,
                             const uint8_t *input,
                             size_t input_size,
                             lzrc_token *tokens,
@@ -184,6 +187,8 @@ static bool tokenize_hashed(unsigned int profile,
 
     while (position < input_size) {
         size_t best_length = 0U;
+        size_t longest_length = 0U;
+        size_t candidates_examined = 0U;
         uint32_t best_offset = 0U;
         uint32_t best_savings = 0U;
         if (input_size - position >= 3U) {
@@ -192,15 +197,36 @@ static bool tokenize_hashed(unsigned int profile,
             while (candidate != UINT32_MAX) {
                 const size_t candidate_position = candidate;
                 const size_t offset = position - candidate_position;
+                const size_t maximum_possible_length =
+                    ((input_size - position) <
+                     parameters.maximum_match_length)
+                        ? (input_size - position)
+                        : parameters.maximum_match_length;
                 size_t length = 0U;
                 if (offset > parameters.window_size) {
                     break;
+                }
+                if (mode == LZRC_LZSS_SEARCH_FAST) {
+                    if (candidates_examined >= LZRC_FAST_MAX_CANDIDATES(profile)) {
+                        break;
+                    }
+                    ++candidates_examined;
+                }
+                if (longest_length >= 3U &&
+                    longest_length < maximum_possible_length &&
+                    input[candidate_position + longest_length] !=
+                        input[position + longest_length]) {
+                    candidate = previous[candidate_position];
+                    continue;
                 }
                 while (length < parameters.maximum_match_length &&
                        position + length < input_size &&
                        input[candidate_position + length] ==
                            input[position + length]) {
                     ++length;
+                }
+                if (length > longest_length) {
+                    longest_length = length;
                 }
                 if (length >= 3U) {
                     if (profile == 1U && length > best_length) {
@@ -272,7 +298,22 @@ bool lzrc_lzss_tokenize(unsigned int profile,
                         lzrc_token *tokens,
                         size_t token_capacity,
                         size_t *token_count) {
+    return lzrc_lzss_tokenize_with_mode(
+        profile, LZRC_LZSS_SEARCH_ORIGINAL, input, input_size, tokens,
+        token_capacity, token_count);
+}
+
+bool lzrc_lzss_tokenize_with_mode(unsigned int profile,
+                                  lzrc_lzss_search_mode mode,
+                                  const uint8_t *input,
+                                  size_t input_size,
+                                  lzrc_token *tokens,
+                                  size_t token_capacity,
+                                  size_t *token_count) {
     if (profile > 4U || token_count == NULL ||
+        (mode != LZRC_LZSS_SEARCH_ORIGINAL &&
+         mode != LZRC_LZSS_SEARCH_FAST) ||
+        (mode == LZRC_LZSS_SEARCH_FAST && profile == 0U) ||
         (input == NULL && input_size != 0U) ||
         (tokens == NULL && token_capacity != 0U)) {
         return false;
@@ -288,8 +329,8 @@ bool lzrc_lzss_tokenize(unsigned int profile,
         return tokenize_profile0(input, input_size, tokens, token_capacity,
                                  token_count);
     }
-    return tokenize_hashed(profile, input, input_size, tokens, token_capacity,
-                           token_count);
+    return tokenize_hashed(profile, mode, input, input_size, tokens,
+                           token_capacity, token_count);
 }
 
 static bool match_is_valid(unsigned int profile, const lzrc_token *token) {

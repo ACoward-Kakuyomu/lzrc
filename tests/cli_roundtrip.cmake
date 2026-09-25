@@ -29,3 +29,33 @@ foreach(profile RANGE 0 4)
         message(FATAL_ERROR "round trip mismatch for profile ${profile}")
     endif()
 endforeach()
+
+foreach(profile RANGE 1 4)
+    execute_process(
+        COMMAND "${LZRC_CLI}" "h${profile}" "${input}" "${compressed}"
+        RESULT_VARIABLE compress_result
+    )
+    if(NOT compress_result EQUAL 0)
+        message(FATAL_ERROR "fast compression failed for profile ${profile}")
+    endif()
+    execute_process(
+        COMMAND "${LZRC_CLI}" d "${compressed}" "${decoded}"
+        RESULT_VARIABLE decompress_result
+    )
+    if(NOT decompress_result EQUAL 0)
+        message(FATAL_ERROR "fast decompression failed for profile ${profile}")
+    endif()
+    file(SHA256 "${input}" input_hash)
+    file(SHA256 "${decoded}" decoded_hash)
+    if(NOT input_hash STREQUAL decoded_hash)
+        message(FATAL_ERROR "fast round trip mismatch for profile ${profile}")
+    endif()
+endforeach()
+
+execute_process(
+    COMMAND "${LZRC_CLI}" h0 "${input}" "${compressed}"
+    RESULT_VARIABLE unsupported_result
+)
+if(unsupported_result EQUAL 0)
+    message(FATAL_ERROR "fast mode unexpectedly accepted profile 0")
+endif()

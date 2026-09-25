@@ -25,6 +25,33 @@ std::vector<lzrc_token> Tokenize(unsigned int profile,
     return tokens;
 }
 
+std::vector<lzrc_token> TokenizeWithMode(
+    unsigned int profile,
+    lzrc_lzss_search_mode mode,
+    const std::vector<std::uint8_t>& input) {
+    std::vector<lzrc_token> tokens(std::max<std::size_t>(input.size(), 1U));
+    std::size_t token_count = 0U;
+    EXPECT_TRUE(lzrc_lzss_tokenize_with_mode(
+        profile, mode, input.data(), input.size(), tokens.data(), tokens.size(),
+        &token_count));
+    tokens.resize(token_count);
+    return tokens;
+}
+
+void ExpectSameTokens(const std::vector<lzrc_token>& actual,
+                      const std::vector<lzrc_token>& expected) {
+    ASSERT_EQ(actual.size(), expected.size());
+    for (std::size_t index = 0U; index < actual.size(); ++index) {
+        EXPECT_EQ(actual[index].type, expected[index].type) << "token=" << index;
+        EXPECT_EQ(actual[index].literal, expected[index].literal)
+            << "token=" << index;
+        EXPECT_EQ(actual[index].length, expected[index].length)
+            << "token=" << index;
+        EXPECT_EQ(actual[index].offset, expected[index].offset)
+            << "token=" << index;
+    }
+}
+
 void ExpectTokenRoundTrip(unsigned int profile,
                           const std::vector<std::uint8_t>& input) {
     const auto tokens = Tokenize(profile, input);
@@ -103,6 +130,60 @@ TEST(LzssProfile1Test, RetainsLongestMatchRule) {
     EXPECT_EQ(selected.type, LZRC_TOKEN_MATCH);
     EXPECT_EQ(selected.length, 19U);
     EXPECT_EQ(selected.offset, 2000U);
+}
+
+TEST(LzssSearchModeTest, ExplicitLegacyModePreservesTokenization) {
+    std::vector<std::uint8_t> input;
+    for (std::uint32_t state = 0x12345678U; input.size() < 4096U;
+         state = state * 1103515245U + 12345U) {
+        input.push_back(static_cast<std::uint8_t>(state >> 24U));
+    }
+    const auto repeated = Bytes("LZRC-LZRC-LZRC-LZRC-");
+    input.insert(input.end(), repeated.begin(), repeated.end());
+    input.insert(input.end(), 600U, 0x5AU);
+
+    for (unsigned int profile = 0U; profile <= 4U; ++profile) {
+        SCOPED_TRACE("profile=" + std::to_string(profile));
+        ExpectSameTokens(Tokenize(profile, input),
+                         TokenizeWithMode(profile, LZRC_LZSS_SEARCH_ORIGINAL,
+                                          input));
+    }
+}
+
+TEST(LzssSearchModeTest, FastModeProducesDecodableTokensForProfilesOneToFour) {
+    std::vector<std::uint8_t> input;
+    std::uint32_t state = 0xBADC0FFEU;
+    for (std::size_t index = 0U; index < 4096U; ++index) {
+        state = state * 1664525U + 1013904223U;
+        input.push_back(static_cast<std::uint8_t>(state >> 24U));
+    }
+    input.insert(input.end(), 3000U, 0x41U);
+
+    for (unsigned int profile = 1U; profile <= 4U; ++profile) {
+        const auto tokens =
+            TokenizeWithMode(profile, LZRC_LZSS_SEARCH_FAST, input);
+        std::vector<std::uint8_t> decoded(input.size());
+        std::size_t decoded_size = 0U;
+        ASSERT_TRUE(lzrc_lzss_detokenize(
+            profile, tokens.data(), tokens.size(), decoded.data(),
+            decoded.size(), &decoded_size))
+            << "profile=" << profile;
+        decoded.resize(decoded_size);
+        EXPECT_EQ(decoded, input) << "profile=" << profile;
+        SCOPED_TRACE("profile=" + std::to_string(profile));
+        ExpectSameTokens(tokens,
+                         TokenizeWithMode(profile, LZRC_LZSS_SEARCH_FAST,
+                                          input));
+    }
+}
+
+TEST(LzssSearchModeTest, RejectsFastModeForProfileZero) {
+    const auto input = Bytes("abcabcabc");
+    std::array<lzrc_token, 16> tokens{};
+    std::size_t token_count = 0U;
+    EXPECT_FALSE(lzrc_lzss_tokenize_with_mode(
+        0U, LZRC_LZSS_SEARCH_FAST, input.data(), input.size(), tokens.data(),
+        tokens.size(), &token_count));
 }
 
 TEST(LzssCostTest, EstimatesCurrentTokenBitLayout) {
