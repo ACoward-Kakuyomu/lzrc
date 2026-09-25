@@ -80,6 +80,7 @@ static bool write_file(const char *path, const uint8_t *data, size_t size) {
 }
 
 static int compress_file(unsigned int profile,
+                         lzrc_compression_mode mode,
                          const char *input_path,
                          const char *output_path) {
     uint8_t *input = NULL;
@@ -110,8 +111,9 @@ static int compress_file(unsigned int profile,
     container[2] = (uint8_t)((input_size >> 8U) & 0xFFU);
     container[3] = (uint8_t)((input_size >> 16U) & 0xFFU);
     container[4] = (uint8_t)((input_size >> 24U) & 0xFFU);
-    result = lzrc_compress(profile, input, input_size, container + 5U,
-                           payload_bound, &payload_size);
+    result = lzrc_compress_with_mode(profile, mode, input, input_size,
+                                     container + 5U, payload_bound,
+                                     &payload_size);
     if (result != LZRC_OK) {
         fprintf(stderr, "lzrc: compression failed: %s\n",
                 lzrc_result_string(result));
@@ -173,6 +175,7 @@ static int decompress_file(const char *input_path, const char *output_path) {
 
 static void print_usage(void) {
     fprintf(stderr, "usage: lzrc c[0-4] input output\n"
+                    "       lzrc h[1-4] input output (fast encoding)\n"
                     "       lzrc d input output\n");
 }
 
@@ -183,7 +186,13 @@ int main(int argc, char **argv) {
     }
     if (argv[1][0] == 'c' && argv[1][1] >= '0' && argv[1][1] <= '4' &&
         argv[1][2] == '\0') {
-        return compress_file((unsigned int)(argv[1][1] - '0'), argv[2], argv[3]);
+        return compress_file((unsigned int)(argv[1][1] - '0'),
+                             LZRC_COMPRESSION_MODE_ORIGINAL, argv[2], argv[3]);
+    }
+    if (argv[1][0] == 'h' && argv[1][1] >= '1' && argv[1][1] <= '4' &&
+        argv[1][2] == '\0') {
+        return compress_file((unsigned int)(argv[1][1] - '0'),
+                             LZRC_COMPRESSION_MODE_FAST, argv[2], argv[3]);
     }
     if (strcmp(argv[1], "d") == 0) {
         return decompress_file(argv[2], argv[3]);

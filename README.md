@@ -43,6 +43,14 @@ lzrc c0 input.bin output.lzrc
 lzrc c4 input.bin output.lzrc
 ```
 
+Use `h1` through `h4` for faster encoding with bounded match-candidate
+search. This may miss a better match and produce a larger stream. Profile 0
+keeps its original low-memory search and has no fast mode.
+
+```console
+lzrc h4 input.bin output.lzrc
+```
+
 Decompression reads the profile and original size from the container header:
 
 ```console
@@ -56,7 +64,8 @@ the five-byte CLI container header, so callers pass the profile and expected
 decoded size explicitly.
 
 Call `lzrc_compress_bound()` to size a compression buffer, then use
-`lzrc_compress()` and `lzrc_decompress()`. All functions return an
+`lzrc_compress()` for legacy mode or `lzrc_compress_with_mode()` to select an
+encoding mode, and `lzrc_decompress()` to decode. All functions return an
 `lzrc_result`; `lzrc_result_string()` provides a short diagnostic message.
 
 ## Development

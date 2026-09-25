@@ -16,6 +16,11 @@ typedef struct lzrc_profile_parameters {
     uint16_t maximum_match_length;
 } lzrc_profile_parameters;
 
+typedef enum lzrc_lzss_search_mode {
+    LZRC_LZSS_SEARCH_ORIGINAL = 0,
+    LZRC_LZSS_SEARCH_FAST = 1
+} lzrc_lzss_search_mode;
+
 bool lzrc_profile_get(unsigned int profile,
                       lzrc_profile_parameters *parameters);
 uint32_t lzrc_lzss_estimated_literal_bits(uint16_t length);
@@ -26,6 +31,13 @@ bool lzrc_lzss_tokenize(unsigned int profile,
                         lzrc_token *tokens,
                         size_t token_capacity,
                         size_t *token_count);
+bool lzrc_lzss_tokenize_with_mode(unsigned int profile,
+                                  lzrc_lzss_search_mode mode,
+                                  const uint8_t *input,
+                                  size_t input_size,
+                                  lzrc_token *tokens,
+                                  size_t token_capacity,
+                                  size_t *token_count);
 bool lzrc_lzss_detokenize(unsigned int profile,
                           const lzrc_token *tokens,
                           size_t token_count,

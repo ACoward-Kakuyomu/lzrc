@@ -17,6 +17,11 @@ typedef enum lzrc_result {
     LZRC_ERROR_OUT_OF_MEMORY
 } lzrc_result;
 
+typedef enum lzrc_compression_mode {
+    LZRC_COMPRESSION_MODE_ORIGINAL = 0,
+    LZRC_COMPRESSION_MODE_FAST = 1
+} lzrc_compression_mode;
+
 lzrc_result lzrc_compress_bound(size_t input_size, size_t *bound);
 
 lzrc_result lzrc_compress(unsigned int profile,
@@ -25,6 +30,14 @@ lzrc_result lzrc_compress(unsigned int profile,
                           uint8_t *output,
                           size_t output_capacity,
                           size_t *output_size);
+
+lzrc_result lzrc_compress_with_mode(unsigned int profile,
+                                    lzrc_compression_mode mode,
+                                    const uint8_t *input,
+                                    size_t input_size,
+                                    uint8_t *output,
+                                    size_t output_capacity,
+                                    size_t *output_size);
 
 lzrc_result lzrc_decompress(unsigned int profile,
                             const uint8_t *input,

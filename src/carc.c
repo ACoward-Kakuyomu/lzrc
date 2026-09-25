@@ -7,6 +7,7 @@
 
 #define LZRC_TREE4_CONTEXTS 15U
 #define LZRC_TREE8_CONTEXTS 255U
+#define LZRC_TREE16_CONTEXTS 65535U
 
 static const uint32_t kOffsetBase[5] = {
     UINT32_C(1), UINT32_C(257), UINT32_C(4097), UINT32_C(65537),
@@ -14,7 +15,15 @@ static const uint32_t kOffsetBase[5] = {
 static const uint32_t kOffsetMaximum[5] = {
     UINT32_C(256), UINT32_C(4096), UINT32_C(65536), UINT32_C(1048576),
     UINT32_C(16777216)};
-static const unsigned int kOffsetDirectBits[5] = {0U, 4U, 8U, 12U, 16U};
+static const unsigned int kOffsetDirectBits[5] = {0U, 4U, 8U, 12U, 8U};
+
+static unsigned int offset_context_bits(unsigned int category) {
+    return (category == 4U) ? 16U : 8U;
+}
+
+static size_t offset_context_count(unsigned int category) {
+    return (category == 4U) ? LZRC_TREE16_CONTEXTS : LZRC_TREE8_CONTEXTS;
+}
 
 lzrc_token lzrc_token_literal(uint8_t value) {
     lzrc_token token;
@@ -46,7 +55,8 @@ size_t lzrc_carc_context_count(unsigned int profile) {
     if (profile == 4U) {
         count += LZRC_TREE8_CONTEXTS;
     }
-    count += (size_t)(profile + 1U) * LZRC_TREE8_CONTEXTS;
+    count += (size_t)profile * LZRC_TREE8_CONTEXTS;
+    count += offset_context_count(profile);
     return count;
 }
 
@@ -88,7 +98,7 @@ static bool carc_model_init(lzrc_carc_model *model,
     }
     for (category = 0U; category <= profile; ++category) {
         model->offsets[category] =
-            take_contexts(&cursor, LZRC_TREE8_CONTEXTS);
+            take_contexts(&cursor, offset_context_count(category));
     }
     return true;
 }
@@ -227,7 +237,8 @@ static bool encode_offset(lzrc_carc_encoder *encoder, uint32_t offset) {
     }
     return encode_unary(&encoder->range, category) &&
            lzrc_bit_tree_encode(&encoder->range,
-                                encoder->model.offsets[category], 8U, upper) &&
+                                encoder->model.offsets[category],
+                                offset_context_bits(category), upper) &&
            encode_direct_value(&encoder->range, lower,
                                kOffsetDirectBits[category]);
 }
@@ -321,7 +332,8 @@ static bool decode_offset(lzrc_carc_decoder *decoder, uint32_t *offset) {
     uint32_t adjusted;
     if (!decode_unary(&decoder->range, decoder->model.profile, &category) ||
         !lzrc_bit_tree_decode(&decoder->range,
-                              decoder->model.offsets[category], 8U, &upper) ||
+                              decoder->model.offsets[category],
+                              offset_context_bits(category), &upper) ||
         !decode_direct_value(&decoder->range, kOffsetDirectBits[category],
                              &lower)) {
         return false;

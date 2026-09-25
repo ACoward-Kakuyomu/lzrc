@@ -24,6 +24,22 @@ std::vector<std::uint8_t> Compress(unsigned int profile,
     return encoded;
 }
 
+std::vector<std::uint8_t> CompressWithMode(
+    unsigned int profile,
+    lzrc_compression_mode mode,
+    const std::vector<std::uint8_t>& input) {
+    std::size_t bound = 0U;
+    EXPECT_EQ(lzrc_compress_bound(input.size(), &bound), LZRC_OK);
+    std::vector<std::uint8_t> encoded(bound);
+    std::size_t encoded_size = 0U;
+    EXPECT_EQ(lzrc_compress_with_mode(profile, mode, input.data(), input.size(),
+                                      encoded.data(), encoded.size(),
+                                      &encoded_size),
+              LZRC_OK);
+    encoded.resize(encoded_size);
+    return encoded;
+}
+
 void ExpectRoundTrip(unsigned int profile,
                      const std::vector<std::uint8_t>& input) {
     const auto encoded = Compress(profile, input);
@@ -103,6 +119,46 @@ TEST(LzrcTest, CompressionIsDeterministic) {
     for (unsigned int profile = 0U; profile <= 4U; ++profile) {
         EXPECT_EQ(Compress(profile, data), Compress(profile, data));
     }
+}
+
+TEST(LzrcTest, FastModeStreamsDecodeForProfilesOneToFour) {
+    auto data = RandomBytes(4096U);
+    data.insert(data.end(), 3000U, 0xA5U);
+
+    for (unsigned int profile = 1U; profile <= 4U; ++profile) {
+        const auto encoded = CompressWithMode(
+            profile, LZRC_COMPRESSION_MODE_FAST, data);
+        std::vector<std::uint8_t> decoded(data.size());
+        std::size_t decoded_size = 0U;
+        ASSERT_EQ(lzrc_decompress(profile, encoded.data(), encoded.size(),
+                                  data.size(), decoded.data(), decoded.size(),
+                                  &decoded_size),
+                 LZRC_OK)
+            << "profile=" << profile;
+        decoded.resize(decoded_size);
+        EXPECT_EQ(decoded, data) << "profile=" << profile;
+    }
+}
+
+TEST(LzrcTest, CompressionModesPreserveLegacyAndRejectUnsupportedFastMode) {
+    const auto data = RandomBytes(4096U);
+    for (unsigned int profile = 0U; profile <= 4U; ++profile) {
+        EXPECT_EQ(Compress(profile, data),
+                  CompressWithMode(profile, LZRC_COMPRESSION_MODE_ORIGINAL,
+                                   data))
+            << "profile=" << profile;
+    }
+
+    std::array<std::uint8_t, 64> output{};
+    std::size_t output_size = 0U;
+    EXPECT_EQ(lzrc_compress_with_mode(
+                  0U, LZRC_COMPRESSION_MODE_FAST, data.data(), data.size(),
+                  output.data(), output.size(), &output_size),
+              LZRC_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(lzrc_compress_with_mode(
+                  1U, static_cast<lzrc_compression_mode>(99), data.data(),
+                  data.size(), output.data(), output.size(), &output_size),
+              LZRC_ERROR_INVALID_ARGUMENT);
 }
 
 TEST(LzrcTest, RoundTripsDeterministicRandomBoundarySizes) {

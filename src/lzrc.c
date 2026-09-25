@@ -20,6 +20,18 @@ lzrc_result lzrc_compress(unsigned int profile,
                           uint8_t *output,
                           size_t output_capacity,
                           size_t *output_size) {
+    return lzrc_compress_with_mode(profile, LZRC_COMPRESSION_MODE_ORIGINAL,
+                                   input, input_size, output, output_capacity,
+                                   output_size);
+}
+
+lzrc_result lzrc_compress_with_mode(unsigned int profile,
+                                    lzrc_compression_mode mode,
+                                    const uint8_t *input,
+                                    size_t input_size,
+                                    uint8_t *output,
+                                    size_t output_capacity,
+                                    size_t *output_size) {
     lzrc_token *tokens = NULL;
     lzrc_context *contexts = NULL;
     size_t token_count = 0U;
@@ -36,6 +48,11 @@ lzrc_result lzrc_compress(unsigned int profile,
     if (profile > 4U) {
         return LZRC_ERROR_INVALID_PROFILE;
     }
+    if ((mode != LZRC_COMPRESSION_MODE_ORIGINAL &&
+         mode != LZRC_COMPRESSION_MODE_FAST) ||
+        (mode == LZRC_COMPRESSION_MODE_FAST && profile == 0U)) {
+        return LZRC_ERROR_INVALID_ARGUMENT;
+    }
     if (input_size > SIZE_MAX / sizeof(*tokens)) {
         return LZRC_ERROR_INVALID_ARGUMENT;
     }
@@ -51,8 +68,11 @@ lzrc_result lzrc_compress(unsigned int profile,
         free(tokens);
         return LZRC_ERROR_OUT_OF_MEMORY;
     }
-    if (!lzrc_lzss_tokenize(profile, input, input_size, tokens, input_size,
-                            &token_count)) {
+    if (!lzrc_lzss_tokenize_with_mode(
+            profile,
+            (mode == LZRC_COMPRESSION_MODE_FAST) ? LZRC_LZSS_SEARCH_FAST
+                                                 : LZRC_LZSS_SEARCH_ORIGINAL,
+            input, input_size, tokens, input_size, &token_count)) {
         result = LZRC_ERROR_OUT_OF_MEMORY;
         goto cleanup;
     }

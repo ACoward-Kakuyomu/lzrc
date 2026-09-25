@@ -40,6 +40,14 @@ lzrc c0 input.bin output.lzrc
 lzrc c4 input.bin output.lzrc
 ```
 
+`h1`〜`h4` を指定すると、候補探索数を制限した高速エンコードを行います。
+より良い一致を見落として出力サイズが大きくなる場合があります。プロファイル0は
+極小メモリ向けの従来探索を維持し、高速モードには対応しません。
+
+```console
+lzrc h4 input.bin output.lzrc
+```
+
 展開処理では、コンテナヘッダーからプロファイルと元のサイズを読み取ります。
 
 ```console
@@ -50,7 +58,7 @@ lzrc d output.lzrc restored.bin
 
 公開されている C99 API は `include/lzrc/lzrc.h` で宣言されています。ライブラリのストリームは 5 バイトの CLI コンテナ ヘッダーを省略するため、呼び出し元はプロファイルとデコード後の想定サイズを明示的に渡す必要があります。
 
-必要な圧縮バッファのサイズを求めるには `lzrc_compress_bound()` を呼び出し、その後 `lzrc_compress()` と `lzrc_decompress()` を使用してください。すべての関数は `lzrc_result` を返します。`lzrc_result_string()` は短い診断メッセージを提供します。
+必要な圧縮バッファのサイズを求めるには `lzrc_compress_bound()` を呼び出します。従来モードには `lzrc_compress()`、モードを選択する場合は `lzrc_compress_with_mode()` を使い、展開には `lzrc_decompress()` を使用してください。すべての関数は `lzrc_result` を返します。`lzrc_result_string()` は短い診断メッセージを提供します。
 
 ## 開発
 
