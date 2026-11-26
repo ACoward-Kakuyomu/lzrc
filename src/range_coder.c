@@ -340,6 +340,12 @@ bool lzrc_range32_encode_direct_bit(lzrc_range32_encoder *encoder,
     return range32_encode_probability(encoder, LZRC_INITIAL_PROBABILITY, bit);
 }
 
+bool lzrc_range32_encode_fixed_bit(lzrc_range32_encoder *encoder,
+                                  uint8_t probability, uint8_t bit) {
+    if (probability == 0U) { encoder->failed = true; return false; }
+    return range32_encode_probability(encoder, probability, bit);
+}
+
 bool lzrc_range32_encoder_finish(lzrc_range32_encoder *encoder) {
     unsigned int index;
     if (encoder->failed || encoder->finished) {
@@ -449,6 +455,12 @@ bool lzrc_range32_decode_bit(lzrc_range32_decoder *decoder,
 bool lzrc_range32_decode_direct_bit(lzrc_range32_decoder *decoder,
                                     uint8_t *bit) {
     return range32_decode_probability(decoder, LZRC_INITIAL_PROBABILITY, bit);
+}
+
+bool lzrc_range32_decode_fixed_bit(lzrc_range32_decoder *decoder,
+                                  uint8_t probability, uint8_t *bit) {
+    if (probability == 0U) { decoder->failed = true; return false; }
+    return range32_decode_probability(decoder, probability, bit);
 }
 
 bool lzrc_range_encoder_init(lzrc_range_encoder *encoder,

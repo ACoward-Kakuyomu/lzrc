@@ -133,6 +133,9 @@ TEST(BwtTest, DecodesHistoricalContainers) {
         {0x4c,0x42,0x57,0x54,0x01,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
          0x16,0,0,0,0x21,0x64,0x69,0x21,0x04,0xed,0x5d,0xc8,0xb5,0xda,
          0x47,0xc5,0x06,0x36,0x01,0xcb,0xdb,0x3d,0xb2,0x92,0x6b,0x07}
+        ,{0x4c,0x42,0x57,0x54,0x02,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
+          0x18,0,0,0,0x21,0x61,0x61,0x60,0xe0,0xd7,0x07,0xe6,0xb4,0xa8,
+          0x42,0x7e,0xf3,0x2f,0x33,0x20,0x8a,0x91,0x8b,0x02,0x1c,0xa7,0x5b,0x1f}
     };
     for (const auto& compressed : fixtures) {
         std::vector<uint8_t> restored(original.size());
@@ -161,4 +164,82 @@ TEST(BwtTest, OrderOneUsesPreviousByteToSelectTree) {
                                    actual.size(), &written), LZRC_OK);
     EXPECT_EQ(written, lzrc_range_encoder_size(&encoder));
     EXPECT_TRUE(std::equal(actual.begin(), actual.begin() + written, reference.begin()));
+}
+
+TEST(BwtTest, MtfKnownRanksAndInPlaceInverse) {
+    const std::vector<uint8_t> input = {2, 2, 1, 2, 0, 0};
+    std::vector<uint8_t> ranks(input.size());
+    lzrc_mtf_forward(input.data(), input.size(), ranks.data());
+    EXPECT_EQ(ranks, (std::vector<uint8_t>{2, 0, 2, 1, 2, 0}));
+    lzrc_mtf_inverse(ranks.data(), ranks.size(), ranks.data());
+    EXPECT_EQ(ranks, input);
+    std::vector<uint8_t> alphabet(256);
+    std::iota(alphabet.begin(), alphabet.end(), uint8_t{0});
+    auto original = alphabet;
+    lzrc_mtf_forward(alphabet.data(), alphabet.size(), alphabet.data());
+    lzrc_mtf_inverse(alphabet.data(), alphabet.size(), alphabet.data());
+    EXPECT_EQ(alphabet, original);
+}
+
+TEST(BwtTest, FixedZeroRunMatchesUnchangingProbability) {
+    std::vector<uint8_t> zeros(1024, 0);
+    std::array<uint8_t, 4096> reference{}, actual{};
+    lzrc_range_encoder encoder;
+    ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, reference.data(), reference.size()));
+    lzrc_context flag{128};
+    ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &flag, 0));
+    for (size_t i = 1; i <= zeros.size(); ++i) {
+        lzrc_context fixed{255}; // Discard adaptation, recreate at every bit.
+        ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &fixed,
+                                                  i == zeros.size() ? 1 : 0));
+    }
+    ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+    size_t written = 0;
+    ASSERT_EQ(lzrc_bwt_encode_block(3, zeros.data(), zeros.size(), actual.data(),
+                                   actual.size(), &written), LZRC_OK);
+    ASSERT_EQ(written, lzrc_range_encoder_size(&encoder));
+    EXPECT_TRUE(std::equal(actual.begin(), actual.begin() + written, reference.begin()));
+    std::vector<uint8_t> restored(zeros.size());
+    EXPECT_EQ(lzrc_bwt_decode_block(3, actual.data(), written, restored.data(), restored.size()),
+              LZRC_OK);
+    EXPECT_EQ(restored, zeros);
+}
+
+TEST(BwtTest, MtfRejectsOverlongRunAndZeroInNonzeroTree) {
+    for (bool zero_run : {false, true}) {
+        std::array<uint8_t, 64> coded{};
+        lzrc_range_encoder encoder;
+        ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, coded.data(), coded.size()));
+        lzrc_context flag{128};
+        ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &flag, zero_run ? 0 : 1));
+        if (zero_run) {
+            // Four zeros cannot fit in the declared three-byte block.
+            for (int i = 0; i < 3; ++i)
+                ASSERT_TRUE(lzrc_range32_encode_fixed_bit(&encoder.state.range32, 255, 0));
+            ASSERT_TRUE(lzrc_range32_encode_fixed_bit(&encoder.state.range32, 255, 1));
+        } else {
+            std::array<lzrc_context, 255> tree;
+            lzrc_contexts_init(tree.data(), tree.size());
+            ASSERT_TRUE(lzrc_bit_tree_encode(&encoder, tree.data(), 8, 0));
+        }
+        ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+        std::array<uint8_t, 3> out{};
+        EXPECT_EQ(lzrc_bwt_decode_block(3, coded.data(), lzrc_range_encoder_size(&encoder),
+                                       out.data(), out.size()), LZRC_ERROR_CORRUPT_INPUT);
+    }
+}
+
+TEST(BwtTest, ZeroRunLengthsIncludingMaximumBlock) {
+    for (unsigned int stage = 3; stage <= LZRC_BWT_STAGE; ++stage) {
+        for (size_t n : {1U, 2U, 3U, 31U, 32U, 255U, 256U, 1023U,
+                         1024U, 65535U, 131072U, 1048576U}) {
+            std::vector<uint8_t> last(n, 0), coded(32 * n + 64), decoded(n);
+            size_t written = 0;
+            ASSERT_EQ(lzrc_bwt_encode_block(stage, last.data(), n, coded.data(),
+                                           coded.size(), &written), LZRC_OK);
+            ASSERT_EQ(lzrc_bwt_decode_block(stage, coded.data(), written, decoded.data(), n),
+                      LZRC_OK) << stage << ":" << n;
+            EXPECT_EQ(decoded, last);
+        }
+    }
 }

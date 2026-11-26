@@ -46,3 +46,10 @@
 - Selected one of 256 byte bit trees using the previous BWT byte; reset models per block.
 - Preserved stage-1 decoding and added a fixed historical container and independent model check.
 - Passed all 56 Debug CTest cases.
+
+## 2026-11-27 — BWT with Move to Front
+
+- Added MTF with the 0..255 initial alphabet, an adaptive zero flag and one nonzero byte tree.
+- Encoded zero runs with n-1 continuation zeros and a mandatory terminator, at fixed P(0)=255/256.
+- Added nonadaptive 32-bit range primitives and malformed MTF/run rejection tests.
+- Passed all 60 Debug CTest cases, including 1 MiB zero runs and historical stage 1/2 fixtures.

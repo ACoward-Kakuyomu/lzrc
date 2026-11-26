@@ -9,6 +9,9 @@ extern "C" {
 #endif
 
 /* Nonempty blocks only, at most 1 MiB. Input/output must not overlap. */
+/* MTF supports in-place operation; initial alphabet is 0..255. */
+void lzrc_mtf_forward(const uint8_t *input, size_t size, uint8_t *ranks);
+void lzrc_mtf_inverse(const uint8_t *ranks, size_t size, uint8_t *output);
 lzrc_result lzrc_bwt_forward(const uint8_t *input, size_t size,
                             uint8_t *last, uint32_t *primary);
 lzrc_result lzrc_bwt_inverse(const uint8_t *last, size_t size,
