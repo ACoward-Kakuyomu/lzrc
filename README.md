@@ -59,6 +59,12 @@ lzrc d output.lzrc restored.bin
 
 ## Library API
 
+BWT block sorting is available through `lzrc W1 input output` through `W8`.
+The number selects multiples of 128 KiB (128 KiB to 1 MiB). `lzrc d` detects
+the BWT container automatically. The C99 API in `include/lzrc/bwt.h` includes
+container headers in its output. Development milestones use tags
+`bwt-step-1` through `bwt-step-5`.
+
 The public C99 API is declared in `include/lzrc/lzrc.h`. Library streams omit
 the five-byte CLI container header, so callers pass the profile and expected
 decoded size explicitly.

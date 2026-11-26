@@ -12,6 +12,9 @@ add_library(lzrc
     src/bit_tree.c
     src/carc.c
     src/lzss.c
+    src/bwt.c
+    src/bwt_model.c
+    src/bwt_codec.c
 )
 
 target_include_directories(lzrc

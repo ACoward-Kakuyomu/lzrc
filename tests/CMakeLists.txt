@@ -1,5 +1,6 @@
 add_executable(lzrc_tests
     bit_tree_test.cpp
+    bwt_test.cpp
     carc_test.cpp
     lzss_test.cpp
     profile_boundary_test.cpp

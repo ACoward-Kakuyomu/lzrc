@@ -33,3 +33,10 @@
 - Added a failing regression test for profile 1's longest-match rule, then limited cost-aware selection to profiles 2-4. All 43 tests passed.
 - Verified that profile 1 output is byte-for-byte identical to `main` on all ordinary samples and that the new decoder restores `main`-produced profile 2-4 streams exactly.
 - Updated the implementation specification and experiment report, then selected the profile 2-4 policy for integration into `main`.
+
+## 2026-11-27 — BWT with 0th-ordered CARC
+
+- Added cyclic BWT with O(n log n) prefix-doubling sorting and LF inversion.
+- Added the versioned LBWT container, C99 API, W1-W8 CLI, and automatic decoding.
+- Encoded BWT bytes with the existing 32-bit range core and one 8-bit bit tree.
+- Passed all 54 Debug CTest cases, including every W block size, truncation and CLI checks.
