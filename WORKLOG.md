@@ -60,3 +60,12 @@
 - Bounded gamma prefixes and values by remaining block output.
 - Verified known gamma words and historical stages 1-3; all 63 Debug CTest cases passed.
 - Measured byte rounding explicitly: a 128-zero block ties at 5 payload bytes; 256 zeros demonstrate unary beating gamma, while 1 MiB demonstrates the reverse.
+
+## 2026-11-27 — Adaptive zero-run coding
+
+- Added an equiprobable selector immediately after each zero flag: unary=0, gamma=1.
+- Selected by estimated run cost using deterministic Q32 integer arithmetic; checked agreement with ideal floating-point costs for all 1..1048576 run lengths.
+  - Verified all run lengths 1..1048576 against both ideal costs and the original Q32 policy: gamma at 1..15 and 2658..1048576, unary at 16..2657.
+- Retained decoding for all five stages, with fixed historical containers covering every stage.
+- Passed all 68 CTest cases in both Visual Studio 2026 x64 Debug and Release, including exact block boundaries and output-capacity canaries.
+\

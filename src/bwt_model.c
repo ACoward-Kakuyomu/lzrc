@@ -87,14 +87,35 @@ static bool decode_gamma_run(lzrc_range_decoder *decoder, size_t limit, size_t *
     return *run <= limit;
 }
 
+bool lzrc_bwt_use_gamma(size_t run) {
+    /* For P(0)=255/256, gamma costs 2*floor(log2(run))+1 bits and
+       unary costs 8+(run-1)*log2(256/255). Throughout valid block sizes,
+       gamma wins at 1..15 and 2658..1048576; unary wins at 16..2657.
+       The selector costs one equiprobable bit for either alternative. */
+    return run <= 15U || run >= 2658U;
+}
+
 static bool encode_run(lzrc_range_encoder *encoder, unsigned int stage, size_t run) {
-    return stage >= 4U ? encode_gamma_run(encoder, run) : encode_unary_run(encoder, run);
+    bool gamma = stage >= 4U;
+    if (stage >= 5U) {
+        gamma = lzrc_bwt_use_gamma(run);
+        /* 0 = fixed-probability unary; 1 = gamma. */
+        if (!lzrc_range_encoder_encode_direct_bit(encoder, gamma ? 1U : 0U))
+            return false;
+    }
+    return gamma ? encode_gamma_run(encoder, run) : encode_unary_run(encoder, run);
 }
 
 static bool decode_run(lzrc_range_decoder *decoder, unsigned int stage,
                         size_t limit, size_t *run) {
-    return stage >= 4U ? decode_gamma_run(decoder, limit, run) :
-                         decode_unary_run(decoder, limit, run);
+    bool gamma = stage >= 4U;
+    if (stage >= 5U) {
+        uint8_t bit;
+        if (!lzrc_range_decoder_decode_direct_bit(decoder, &bit)) return false;
+        gamma = bit != 0U;
+    }
+    return gamma ? decode_gamma_run(decoder, limit, run) :
+                   decode_unary_run(decoder, limit, run);
 }
 
 static lzrc_result encode_mtf(unsigned int stage, const uint8_t *last, size_t size,

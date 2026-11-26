@@ -3,6 +3,7 @@
 #include "bit_tree.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <numeric>
 #include <random>
 #include <string>
@@ -139,6 +140,12 @@ TEST(BwtTest, DecodesHistoricalContainers) {
         ,{0x4c,0x42,0x57,0x54,0x03,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
           0x11,0,0,0,0x90,0xd7,0xe8,0x24,0x6a,0xe9,0xd3,0x8a,0x5c,0x7a,
           0xfa,0x77,0xfa,0x87,0xa8,0x30,0x00}
+        ,{0x4c,0x42,0x57,0x54,0x04,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
+          0x0e,0,0,0,0x90,0xd7,0xd3,0xb6,0x75,0xaa,0x7b,0xac,0x71,0x16,
+          0x35,0xc5,0x45,0x00}
+        ,{0x4c,0x42,0x57,0x54,0x05,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
+          0x0e,0,0,0,0x90,0xd7,0xde,0x01,0x9b,0x31,0x3b,0x5a,0x73,0x77,
+          0xe6,0xe8,0x82,0xf0}
     };
     for (const auto& compressed : fixtures) {
         std::vector<uint8_t> restored(original.size());
@@ -295,5 +302,82 @@ TEST(BwtTest, GammaImprovesVeryLongRunButUnaryWinsForMediumRun) {
                                        &gamma_size), LZRC_OK);
         if (n == 256) EXPECT_LT(unary_size, gamma_size);
         else EXPECT_LT(gamma_size, unary_size);
+    }
+}
+
+TEST(BwtTest, HybridCostPolicyMatchesIdealCostsForEveryRunLength) {
+    unsigned int changes = 0;
+    bool previous = true;
+    for (size_t n = 1; n <= 8U * LZRC_BWT_BLOCK_UNIT; ++n) {
+        const double unary = 8.0 + static_cast<double>(n - 1) * std::log2(256.0 / 255.0);
+        const double gamma = 2.0 * std::floor(std::log2(static_cast<double>(n))) + 1.0;
+        const bool chosen = lzrc_bwt_use_gamma(n);
+        ASSERT_EQ(chosen, gamma <= unary) << n;
+        if (chosen != previous) ++changes;
+        previous = chosen;
+    }
+    EXPECT_EQ(changes, 2U); // Gamma, then unary, then gamma again.
+}
+
+TEST(BwtTest, HybridStoresSelectorImmediatelyAfterZeroFlag) {
+    for (size_t n : {1U, 2U, 15U, 16U, 17U, 128U, 256U, 1024U,
+                     2657U, 2658U, 4095U, 4096U, 1048576U}) {
+        std::vector<uint8_t> last(n, 0), coded(32 * n + 64), decoded(n);
+        size_t written = 0;
+        ASSERT_EQ(lzrc_bwt_encode_block(5, last.data(), n, coded.data(), coded.size(),
+                                       &written), LZRC_OK);
+        lzrc_range_decoder decoder;
+        ASSERT_TRUE(lzrc_range_decoder_init(&decoder, 4, coded.data(), written));
+        lzrc_context flag{128};
+        uint8_t zero = 1, selector = 0;
+        ASSERT_TRUE(lzrc_range_decoder_decode_bit(&decoder, &flag, &zero));
+        EXPECT_EQ(zero, 0);
+        ASSERT_TRUE(lzrc_range_decoder_decode_direct_bit(&decoder, &selector));
+        const double unary = 8.0 + static_cast<double>(n - 1) * std::log2(256.0 / 255.0);
+        const double gamma = 2.0 * std::floor(std::log2(static_cast<double>(n))) + 1.0;
+        EXPECT_EQ(selector, gamma <= unary ? 1 : 0) << n;
+        ASSERT_EQ(lzrc_bwt_decode_block(5, coded.data(), written, decoded.data(), n), LZRC_OK);
+        EXPECT_EQ(decoded, last);
+    }
+}
+
+TEST(BwtTest, HybridRejectsMalformedRunsInBothModes) {
+    for (uint8_t selector : {uint8_t{0}, uint8_t{1}}) {
+        std::array<uint8_t, 128> coded{}, decoded{};
+        lzrc_range_encoder encoder;
+        ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, coded.data(), coded.size()));
+        lzrc_context flag{128};
+        ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &flag, 0));
+        ASSERT_TRUE(lzrc_range_encoder_encode_direct_bit(&encoder, selector));
+        if (selector == 0) {
+            for (int i = 0; i < 4; ++i)
+                ASSERT_TRUE(lzrc_range32_encode_fixed_bit(&encoder.state.range32, 255, 0));
+            ASSERT_TRUE(lzrc_range32_encode_fixed_bit(&encoder.state.range32, 255, 1));
+        } else {
+            for (uint8_t bit : std::array<uint8_t, 5>{0, 0, 1, 0, 1})
+                ASSERT_TRUE(lzrc_range_encoder_encode_direct_bit(&encoder, bit));
+        }
+        ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+        EXPECT_EQ(lzrc_bwt_decode_block(5, coded.data(), lzrc_range_encoder_size(&encoder),
+                                       decoded.data(), 4), LZRC_ERROR_CORRUPT_INPUT);
+    }
+}
+
+TEST(BwtTest, ExactAndAdjacentBlockBoundaries) {
+    for (size_t n : {131071U, 131072U, 131073U, 262144U})
+        roundtrip(std::vector<uint8_t>(n, 31));
+}
+
+TEST(BwtTest, ShortOutputNeverWritesPastCapacity) {
+    const std::vector<uint8_t> input = {1, 0, 1, 0, 1, 2, 3};
+    const auto good = pack(input);
+    for (size_t capacity = 0; capacity < good.size(); ++capacity) {
+        std::vector<uint8_t> output(good.size() + 1, 0xa5);
+        size_t written = 123;
+        EXPECT_EQ(lzrc_bwt_compress(1, input.data(), input.size(), output.data(),
+                                    capacity, &written), LZRC_ERROR_OUTPUT_TOO_SMALL);
+        EXPECT_EQ(written, 0U);
+        EXPECT_TRUE(std::all_of(output.begin() + capacity, output.end(),
+                                [](uint8_t byte) { return byte == 0xa5; }));
     }
 }

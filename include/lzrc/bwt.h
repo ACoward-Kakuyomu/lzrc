@@ -8,11 +8,12 @@ extern "C" {
 #endif
 
 /* W1..W8 select multiples of 128 KiB. Containers identify their own stage. */
-#define LZRC_BWT_STAGE 4U
+#define LZRC_BWT_STAGE 5U
 #define LZRC_BWT_BLOCK_UNIT 131072U
 
 lzrc_result lzrc_bwt_compress_bound(size_t input_size, unsigned int blocks,
                                    size_t *bound);
+/* Input and output buffers must not overlap. */
 lzrc_result lzrc_bwt_compress(unsigned int blocks,
                              const uint8_t *input, size_t input_size,
                              uint8_t *output, size_t output_capacity,
