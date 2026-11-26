@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "bwt.h"
+#include "bit_tree.h"
 #include <algorithm>
 #include <array>
 #include <numeric>
@@ -124,4 +125,40 @@ TEST(BwtTest, RejectsTruncationBadHeadersAndTrailingBytes) {
     EXPECT_EQ(lzrc_bwt_decompress(good.data(), good.size(), restored.size(),
                                  restored.data(), restored.size(), &written),
               LZRC_ERROR_CORRUPT_INPUT);
+}
+
+TEST(BwtTest, DecodesHistoricalContainers) {
+    const std::string original = "banana banana banana!\n";
+    const std::vector<std::vector<uint8_t>> fixtures = {
+        {0x4c,0x42,0x57,0x54,0x01,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
+         0x16,0,0,0,0x21,0x64,0x69,0x21,0x04,0xed,0x5d,0xc8,0xb5,0xda,
+         0x47,0xc5,0x06,0x36,0x01,0xcb,0xdb,0x3d,0xb2,0x92,0x6b,0x07}
+    };
+    for (const auto& compressed : fixtures) {
+        std::vector<uint8_t> restored(original.size());
+        size_t written = 0;
+        ASSERT_EQ(lzrc_bwt_decompress(compressed.data(), compressed.size(), original.size(),
+                                     restored.data(), restored.size(), &written), LZRC_OK);
+        EXPECT_EQ(std::string(restored.begin(), restored.end()), original);
+    }
+}
+
+TEST(BwtTest, OrderOneUsesPreviousByteToSelectTree) {
+    const std::vector<uint8_t> last = {2, 3, 2, 3, 2, 4, 2, 3, 0, 2, 3};
+    std::vector<lzrc_context> contexts(256U * 255U);
+    lzrc_contexts_init(contexts.data(), contexts.size());
+    std::array<uint8_t, 256> reference{}, actual{};
+    lzrc_range_encoder encoder;
+    ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, reference.data(), reference.size()));
+    uint8_t previous = 0;
+    for (uint8_t value : last) {
+        ASSERT_TRUE(lzrc_bit_tree_encode(&encoder, contexts.data() + previous * 255U, 8, value));
+        previous = value;
+    }
+    ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+    size_t written = 0;
+    ASSERT_EQ(lzrc_bwt_encode_block(2, last.data(), last.size(), actual.data(),
+                                   actual.size(), &written), LZRC_OK);
+    EXPECT_EQ(written, lzrc_range_encoder_size(&encoder));
+    EXPECT_TRUE(std::equal(actual.begin(), actual.begin() + written, reference.begin()));
 }

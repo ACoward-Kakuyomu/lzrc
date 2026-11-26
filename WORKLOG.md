@@ -40,3 +40,9 @@
 - Added the versioned LBWT container, C99 API, W1-W8 CLI, and automatic decoding.
 - Encoded BWT bytes with the existing 32-bit range core and one 8-bit bit tree.
 - Passed all 54 Debug CTest cases, including every W block size, truncation and CLI checks.
+
+## 2026-11-27 — BWT with 1st-ordered CARC
+
+- Selected one of 256 byte bit trees using the previous BWT byte; reset models per block.
+- Preserved stage-1 decoding and added a fixed historical container and independent model check.
+- Passed all 56 Debug CTest cases.

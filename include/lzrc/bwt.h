@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /* W1..W8 select multiples of 128 KiB. Containers identify their own stage. */
-#define LZRC_BWT_STAGE 1U
+#define LZRC_BWT_STAGE 2U
 #define LZRC_BWT_BLOCK_UNIT 131072U
 
 lzrc_result lzrc_bwt_compress_bound(size_t input_size, unsigned int blocks,
