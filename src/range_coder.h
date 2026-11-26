@@ -112,6 +112,9 @@ bool lzrc_range32_encode_bit(lzrc_range32_encoder *encoder,
                              uint8_t bit);
 bool lzrc_range32_encode_direct_bit(lzrc_range32_encoder *encoder,
                                     uint8_t bit);
+/* probability is P(bit == 0) in units of 1/256, in [1,255]; no adaptation. */
+bool lzrc_range32_encode_fixed_bit(lzrc_range32_encoder *encoder,
+                                  uint8_t probability, uint8_t bit);
 bool lzrc_range32_encoder_finish(lzrc_range32_encoder *encoder);
 size_t lzrc_range32_encoder_size(const lzrc_range32_encoder *encoder);
 
@@ -123,6 +126,8 @@ bool lzrc_range32_decode_bit(lzrc_range32_decoder *decoder,
                              uint8_t *bit);
 bool lzrc_range32_decode_direct_bit(lzrc_range32_decoder *decoder,
                                     uint8_t *bit);
+bool lzrc_range32_decode_fixed_bit(lzrc_range32_decoder *decoder,
+                                  uint8_t probability, uint8_t *bit);
 
 bool lzrc_range_encoder_init(lzrc_range_encoder *encoder,
                              unsigned int profile,

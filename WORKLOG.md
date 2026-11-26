@@ -33,3 +33,39 @@
 - Added a failing regression test for profile 1's longest-match rule, then limited cost-aware selection to profiles 2-4. All 43 tests passed.
 - Verified that profile 1 output is byte-for-byte identical to `main` on all ordinary samples and that the new decoder restores `main`-produced profile 2-4 streams exactly.
 - Updated the implementation specification and experiment report, then selected the profile 2-4 policy for integration into `main`.
+
+## 2026-11-27 — BWT with 0th-ordered CARC
+
+- Added cyclic BWT with O(n log n) prefix-doubling sorting and LF inversion.
+- Added the versioned LBWT container, C99 API, W1-W8 CLI, and automatic decoding.
+- Encoded BWT bytes with the existing 32-bit range core and one 8-bit bit tree.
+- Passed all 54 Debug CTest cases, including every W block size, truncation and CLI checks.
+
+## 2026-11-27 — BWT with 1st-ordered CARC
+
+- Selected one of 256 byte bit trees using the previous BWT byte; reset models per block.
+- Preserved stage-1 decoding and added a fixed historical container and independent model check.
+- Passed all 56 Debug CTest cases.
+
+## 2026-11-27 — BWT with Move to Front
+
+- Added MTF with the 0..255 initial alphabet, an adaptive zero flag and one nonzero byte tree.
+- Encoded zero runs with n-1 continuation zeros and a mandatory terminator, at fixed P(0)=255/256.
+- Added nonadaptive 32-bit range primitives and malformed MTF/run rejection tests.
+- Passed all 60 Debug CTest cases, including 1 MiB zero runs and historical stage 1/2 fixtures.
+
+## 2026-11-27 — Use gamma coding
+
+- Replaced zero-run representation with gamma(n), range-coded using fixed equiprobable bits.
+- Bounded gamma prefixes and values by remaining block output.
+- Verified known gamma words and historical stages 1-3; all 63 Debug CTest cases passed.
+- Measured byte rounding explicitly: a 128-zero block ties at 5 payload bytes; 256 zeros demonstrate unary beating gamma, while 1 MiB demonstrates the reverse.
+
+## 2026-11-27 — Adaptive zero-run coding
+
+- Added an equiprobable selector immediately after each zero flag: unary=0, gamma=1.
+- Selected by estimated run cost using deterministic Q32 integer arithmetic; checked agreement with ideal floating-point costs for all 1..1048576 run lengths.
+  - Verified all run lengths 1..1048576 against both ideal costs and the original Q32 policy: gamma at 1..15 and 2658..1048576, unary at 16..2657.
+- Retained decoding for all five stages, with fixed historical containers covering every stage.
+- Passed all 68 CTest cases in both Visual Studio 2026 x64 Debug and Release, including exact block boundaries and output-capacity canaries.
+\

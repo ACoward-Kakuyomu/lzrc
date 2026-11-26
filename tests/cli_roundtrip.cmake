@@ -59,3 +59,22 @@ execute_process(
 if(unsupported_result EQUAL 0)
     message(FATAL_ERROR "fast mode unexpectedly accepted profile 0")
 endif()
+
+foreach(blocks RANGE 1 8)
+    execute_process(COMMAND "${LZRC_CLI}" "W${blocks}" "${input}" "${compressed}"
+                    RESULT_VARIABLE compress_result)
+    execute_process(COMMAND "${LZRC_CLI}" d "${compressed}" "${decoded}"
+                    RESULT_VARIABLE decompress_result)
+    file(SHA256 "${decoded}" decoded_hash)
+    if(NOT compress_result EQUAL 0 OR NOT decompress_result EQUAL 0 OR
+       NOT input_hash STREQUAL decoded_hash)
+        message(FATAL_ERROR "BWT round trip failed for W${blocks}")
+    endif()
+endforeach()
+foreach(mode W0 W9 W10 w1)
+    execute_process(COMMAND "${LZRC_CLI}" "${mode}" "${input}" "${compressed}"
+                    RESULT_VARIABLE invalid_result)
+    if(invalid_result EQUAL 0)
+        message(FATAL_ERROR "invalid mode accepted: ${mode}")
+    endif()
+endforeach()

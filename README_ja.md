@@ -48,6 +48,20 @@ lzrc c4 input.bin output.lzrc
 lzrc h4 input.bin output.lzrc
 ```
 
+`W1`〜`W8` はBWTによるブロックソート圧縮です。数字は128 KiB単位の
+ブロックサイズを指定し、`W1` は128 KiB、`W8` は1 MiBになります。
+既存のLZSSモードとは別のコンテナ形式を使い、`d` が自動識別します。
+各段階の完成版は `bwt-step-1`〜`bwt-step-5` のタグで参照できます。
+
+```console
+lzrc W1 input.bin output.lbwt
+lzrc W8 input.bin output.lbwt
+lzrc d output.lbwt restored.bin
+```
+
+BWT用C99 APIは `include/lzrc/bwt.h` にあります。従来APIと異なり、
+圧縮関数の出力にはコンテナヘッダーを含みます。
+
 展開処理では、コンテナヘッダーからプロファイルと元のサイズを読み取ります。
 
 ```console

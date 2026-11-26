@@ -1,4 +1,5 @@
 #include "lzrc/lzrc.h"
+#include "lzrc/bwt.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -127,6 +128,33 @@ static int compress_file(unsigned int profile,
     return write_ok ? 0 : 1;
 }
 
+static int compress_bwt_file(unsigned int blocks, const char *input_path,
+                             const char *output_path) {
+    uint8_t *input = NULL, *container;
+    size_t input_size = 0U, capacity = 0U, written = 0U;
+    lzrc_result result;
+    bool ok;
+    if (!read_file(input_path, &input, &input_size)) return 1;
+    result = lzrc_bwt_compress_bound(input_size, blocks, &capacity);
+    if (result != LZRC_OK) {
+        fprintf(stderr, "lzrc: input is too large\n");
+        free(input); return 1;
+    }
+    container = (uint8_t *)malloc(capacity);
+    if (container == NULL) {
+        fprintf(stderr, "lzrc: out of memory\n");
+        free(input); return 1;
+    }
+    result = lzrc_bwt_compress(blocks, input, input_size, container, capacity, &written);
+    if (result != LZRC_OK) {
+        fprintf(stderr, "lzrc: compression failed: %s\n", lzrc_result_string(result));
+        free(input); free(container); return 1;
+    }
+    ok = write_file(output_path, container, written);
+    free(input); free(container);
+    return ok ? 0 : 1;
+}
+
 static int decompress_file(const char *input_path, const char *output_path) {
     uint8_t *container = NULL;
     uint8_t *output = NULL;
@@ -134,6 +162,8 @@ static int decompress_file(const char *input_path, const char *output_path) {
     size_t output_size = 0U;
     uint32_t original_size;
     unsigned int profile;
+    bool is_bwt;
+    size_t size_offset;
     lzrc_result result;
     bool write_ok;
 
@@ -145,11 +175,17 @@ static int decompress_file(const char *input_path, const char *output_path) {
         free(container);
         return 1;
     }
+    is_bwt = memcmp(container, "LBWT", 4U) == 0;
+    if (is_bwt && container_size < 12U) {
+        fprintf(stderr, "lzrc: truncated BWT header\n");
+        free(container); return 1;
+    }
     profile = container[0];
-    original_size = (uint32_t)container[1] |
-                    ((uint32_t)container[2] << 8U) |
-                    ((uint32_t)container[3] << 16U) |
-                    ((uint32_t)container[4] << 24U);
+    size_offset = is_bwt ? 8U : 1U;
+    original_size = (uint32_t)container[size_offset] |
+                    ((uint32_t)container[size_offset + 1U] << 8U) |
+                    ((uint32_t)container[size_offset + 2U] << 16U) |
+                    ((uint32_t)container[size_offset + 3U] << 24U);
     if (original_size != 0U) {
         output = (uint8_t *)malloc(original_size);
         if (output == NULL) {
@@ -158,8 +194,13 @@ static int decompress_file(const char *input_path, const char *output_path) {
             return 1;
         }
     }
-    result = lzrc_decompress(profile, container + 5U, container_size - 5U,
-                             original_size, output, original_size, &output_size);
+    if (is_bwt) {
+        result = lzrc_bwt_decompress(container, container_size, original_size,
+                                    output, original_size, &output_size);
+    } else {
+        result = lzrc_decompress(profile, container + 5U, container_size - 5U,
+                                 original_size, output, original_size, &output_size);
+    }
     if (result != LZRC_OK) {
         fprintf(stderr, "lzrc: decompression failed: %s\n",
                 lzrc_result_string(result));
@@ -176,6 +217,7 @@ static int decompress_file(const char *input_path, const char *output_path) {
 static void print_usage(void) {
     fprintf(stderr, "usage: lzrc c[0-4] input output\n"
                     "       lzrc h[1-4] input output (fast encoding)\n"
+                    "       lzrc W[1-8] input output (BWT, N * 128 KiB)\n"
                     "       lzrc d input output\n");
 }
 
@@ -196,6 +238,10 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "d") == 0) {
         return decompress_file(argv[2], argv[3]);
+    }
+    if (argv[1][0] == 'W' && argv[1][1] >= '1' && argv[1][1] <= '8' &&
+        argv[1][2] == '\0') {
+        return compress_bwt_file((unsigned int)(argv[1][1] - '0'), argv[2], argv[3]);
     }
     print_usage();
     return 2;
