@@ -53,3 +53,10 @@
 - Encoded zero runs with n-1 continuation zeros and a mandatory terminator, at fixed P(0)=255/256.
 - Added nonadaptive 32-bit range primitives and malformed MTF/run rejection tests.
 - Passed all 60 Debug CTest cases, including 1 MiB zero runs and historical stage 1/2 fixtures.
+
+## 2026-11-27 — Use gamma coding
+
+- Replaced zero-run representation with gamma(n), range-coded using fixed equiprobable bits.
+- Bounded gamma prefixes and values by remaining block output.
+- Verified known gamma words and historical stages 1-3; all 63 Debug CTest cases passed.
+- Measured byte rounding explicitly: a 128-zero block ties at 5 payload bytes; 256 zeros demonstrate unary beating gamma, while 1 MiB demonstrates the reverse.

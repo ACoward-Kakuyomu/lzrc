@@ -31,7 +31,7 @@ void lzrc_mtf_inverse(const uint8_t *ranks, size_t size, uint8_t *output) {
     }
 }
 
-static bool encode_run(lzrc_range_encoder *encoder, size_t run) {
+static bool encode_unary_run(lzrc_range_encoder *encoder, size_t run) {
     size_t i;
     /* The zero flag already represents the first zero. Always terminate. */
     for (i = 1U; i < run; ++i) {
@@ -41,7 +41,7 @@ static bool encode_run(lzrc_range_encoder *encoder, size_t run) {
     return lzrc_range32_encode_fixed_bit(&encoder->state.range32, 255U, 1U);
 }
 
-static bool decode_run(lzrc_range_decoder *decoder, size_t limit, size_t *run) {
+static bool decode_unary_run(lzrc_range_decoder *decoder, size_t limit, size_t *run) {
     *run = 1U;
     for (;;) {
         uint8_t bit;
@@ -53,7 +53,51 @@ static bool decode_run(lzrc_range_decoder *decoder, size_t limit, size_t *run) {
     }
 }
 
-static lzrc_result encode_mtf(const uint8_t *last, size_t size,
+static bool encode_gamma_run(lzrc_range_encoder *encoder, size_t run) {
+    size_t value = run;
+    unsigned int width = 0U, i;
+    while (value > 1U) { value >>= 1U; ++width; }
+    for (i = 0U; i < width; ++i) {
+        if (!lzrc_range_encoder_encode_direct_bit(encoder, 0U)) return false;
+    }
+    for (i = width + 1U; i > 0U; --i) {
+        if (!lzrc_range_encoder_encode_direct_bit(encoder,
+                   (uint8_t)((run >> (i - 1U)) & 1U))) return false;
+    }
+    return true;
+}
+
+static bool decode_gamma_run(lzrc_range_decoder *decoder, size_t limit, size_t *run) {
+    unsigned int width = 0U, i;
+    size_t minimum = 1U;
+    uint8_t bit;
+    for (;;) {
+        if (!lzrc_range_decoder_decode_direct_bit(decoder, &bit)) return false;
+        if (bit != 0U) break;
+        /* Bound prefix length before shifting, even for malformed streams. */
+        if (minimum > limit / 2U) return false;
+        minimum <<= 1U;
+        ++width;
+    }
+    *run = 1U;
+    for (i = 0U; i < width; ++i) {
+        if (!lzrc_range_decoder_decode_direct_bit(decoder, &bit)) return false;
+        *run = (*run << 1U) | bit;
+    }
+    return *run <= limit;
+}
+
+static bool encode_run(lzrc_range_encoder *encoder, unsigned int stage, size_t run) {
+    return stage >= 4U ? encode_gamma_run(encoder, run) : encode_unary_run(encoder, run);
+}
+
+static bool decode_run(lzrc_range_decoder *decoder, unsigned int stage,
+                        size_t limit, size_t *run) {
+    return stage >= 4U ? decode_gamma_run(decoder, limit, run) :
+                         decode_unary_run(decoder, limit, run);
+}
+
+static lzrc_result encode_mtf(unsigned int stage, const uint8_t *last, size_t size,
                               uint8_t *output, size_t capacity, size_t *written) {
     lzrc_range_encoder encoder;
     lzrc_context flag = {128U}, tree[255];
@@ -70,7 +114,7 @@ static lzrc_result encode_mtf(const uint8_t *last, size_t size,
         if (value == 0U) {
             size_t end = i + 1U;
             while (end < size && ranks[end] == 0U) ++end;
-            if (ok) ok = encode_run(&encoder, end - i);
+            if (ok) ok = encode_run(&encoder, stage, end - i);
             i = end;
         } else {
             if (ok) ok = lzrc_bit_tree_encode(&encoder, tree, 8U, value);
@@ -83,7 +127,7 @@ static lzrc_result encode_mtf(const uint8_t *last, size_t size,
     return LZRC_OK;
 }
 
-static lzrc_result decode_mtf(const uint8_t *input, size_t input_size,
+static lzrc_result decode_mtf(unsigned int stage, const uint8_t *input, size_t input_size,
                               uint8_t *last, size_t size) {
     lzrc_range_decoder decoder;
     lzrc_context flag = {128U}, tree[255];
@@ -97,7 +141,7 @@ static lzrc_result decode_mtf(const uint8_t *input, size_t input_size,
             return LZRC_ERROR_CORRUPT_INPUT;
         if (bit == 0U) {
             size_t run;
-            if (!decode_run(&decoder, size - i, &run)) return LZRC_ERROR_CORRUPT_INPUT;
+            if (!decode_run(&decoder, stage, size - i, &run)) return LZRC_ERROR_CORRUPT_INPUT;
             memset(last + i, 0, run);
             i += run;
         } else {
@@ -121,7 +165,7 @@ lzrc_result lzrc_bwt_encode_block(unsigned int stage, const uint8_t *last,
     lzrc_context *contexts;
     uint8_t previous = 0U;
     size_t i;
-    if (stage >= 3U) return encode_mtf(last, size, output, capacity, written);
+    if (stage >= 3U) return encode_mtf(stage, last, size, output, capacity, written);
     contexts = (lzrc_context *)malloc(count * sizeof(lzrc_context));
     if (contexts == NULL) return LZRC_ERROR_OUT_OF_MEMORY;
     lzrc_contexts_init(contexts, count);
@@ -147,7 +191,7 @@ lzrc_result lzrc_bwt_decode_block(unsigned int stage, const uint8_t *input,
     lzrc_context *contexts;
     uint8_t previous = 0U;
     size_t i;
-    if (stage >= 3U) return decode_mtf(input, input_size, last, size);
+    if (stage >= 3U) return decode_mtf(stage, input, input_size, last, size);
     if (!lzrc_range_decoder_init(&decoder, 4U, input, input_size))
         return LZRC_ERROR_CORRUPT_INPUT;
     contexts = (lzrc_context *)malloc(count * sizeof(lzrc_context));

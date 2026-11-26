@@ -136,6 +136,9 @@ TEST(BwtTest, DecodesHistoricalContainers) {
         ,{0x4c,0x42,0x57,0x54,0x02,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
           0x18,0,0,0,0x21,0x61,0x61,0x60,0xe0,0xd7,0x07,0xe6,0xb4,0xa8,
           0x42,0x7e,0xf3,0x2f,0x33,0x20,0x8a,0x91,0x8b,0x02,0x1c,0xa7,0x5b,0x1f}
+        ,{0x4c,0x42,0x57,0x54,0x03,0x01,0,0,0x16,0,0,0,0x0d,0,0,0,
+          0x11,0,0,0,0x90,0xd7,0xe8,0x24,0x6a,0xe9,0xd3,0x8a,0x5c,0x7a,
+          0xfa,0x77,0xfa,0x87,0xa8,0x30,0x00}
     };
     for (const auto& compressed : fixtures) {
         std::vector<uint8_t> restored(original.size());
@@ -241,5 +244,56 @@ TEST(BwtTest, ZeroRunLengthsIncludingMaximumBlock) {
                       LZRC_OK) << stage << ":" << n;
             EXPECT_EQ(decoded, last);
         }
+    }
+}
+
+TEST(BwtTest, GammaMatchesKnownCodewords) {
+    const std::vector<std::pair<size_t, std::string>> cases = {
+        {1, "1"}, {2, "010"}, {3, "011"}, {4, "00100"}, {5, "00101"},
+        {7, "00111"}, {8, "0001000"}, {15, "0001111"}, {16, "000010000"}
+    };
+    for (const auto& item : cases) {
+        std::array<uint8_t, 128> reference{}, actual{};
+        lzrc_range_encoder encoder;
+        ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, reference.data(), reference.size()));
+        lzrc_context flag{128};
+        ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &flag, 0));
+        for (char bit : item.second)
+            ASSERT_TRUE(lzrc_range_encoder_encode_direct_bit(&encoder, bit == '1' ? 1 : 0));
+        ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+        std::vector<uint8_t> last(item.first, 0);
+        size_t written = 0;
+        ASSERT_EQ(lzrc_bwt_encode_block(4, last.data(), last.size(), actual.data(),
+                                       actual.size(), &written), LZRC_OK);
+        ASSERT_EQ(written, lzrc_range_encoder_size(&encoder));
+        EXPECT_TRUE(std::equal(actual.begin(), actual.begin() + written, reference.begin()));
+    }
+}
+
+TEST(BwtTest, GammaRejectsOverlongValueAndPrefix) {
+    for (const std::string bits : {"00101", "000000000000000000000000000000"}) {
+        std::array<uint8_t, 128> coded{}, decoded{};
+        lzrc_range_encoder encoder;
+        ASSERT_TRUE(lzrc_range_encoder_init(&encoder, 4, coded.data(), coded.size()));
+        lzrc_context flag{128};
+        ASSERT_TRUE(lzrc_range_encoder_encode_bit(&encoder, &flag, 0));
+        for (char bit : bits)
+            ASSERT_TRUE(lzrc_range_encoder_encode_direct_bit(&encoder, bit == '1' ? 1 : 0));
+        ASSERT_TRUE(lzrc_range_encoder_finish(&encoder));
+        EXPECT_EQ(lzrc_bwt_decode_block(4, coded.data(), lzrc_range_encoder_size(&encoder),
+                                       decoded.data(), 4), LZRC_ERROR_CORRUPT_INPUT);
+    }
+}
+
+TEST(BwtTest, GammaImprovesVeryLongRunButUnaryWinsForMediumRun) {
+    for (size_t n : {256U, 1048576U}) {
+        std::vector<uint8_t> last(n, 0), coded(32 * n + 64);
+        size_t unary_size = 0, gamma_size = 0;
+        ASSERT_EQ(lzrc_bwt_encode_block(3, last.data(), n, coded.data(), coded.size(),
+                                       &unary_size), LZRC_OK);
+        ASSERT_EQ(lzrc_bwt_encode_block(4, last.data(), n, coded.data(), coded.size(),
+                                       &gamma_size), LZRC_OK);
+        if (n == 256) EXPECT_LT(unary_size, gamma_size);
+        else EXPECT_LT(gamma_size, unary_size);
     }
 }
